@@ -96,7 +96,8 @@ handle_cast({update_item, Item}, State) when is_integer(Item), is_record(State, 
 	  error -> 
 		  {ok, ItemValue} = get_item(Item),
 		  io:format("updated item ~p with content~n~p~n",[Item, ItemValue]),
-		  Updated_item_store = maps:put(Item, ItemValue, State#state.item_store),
+		  ItemEnriched = maps:put(nohn_timestamp, os:system_time(), ItemValue),
+		  Updated_item_store = maps:put(ItemEnriched, ItemValue, State#state.item_store),
 		  {noreply, State#state{item_store = Updated_item_store}};
 	  _ ->
 		  {noreply, State}
