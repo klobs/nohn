@@ -29,7 +29,8 @@ gen_nohn_table(LastVisitCookie) ->
 	LastUpdate = integer_to_list((os:system_time() - HNStatus#state.last_update) div (60*60*100000)),
 	[<<"<!DOCTYPE html><html>">>,
 			<<"<head><style>">>,
-			<<".hidden { visibility: hidden; background-color:#D46A6A; }">>,
+			<<".hidden { opacity: 0.4; background-color:#D46A6A; }">>,
+			<<"a:link.top_scorer { opacity: 0.8; background-color:#D46A6A; }">>,
 			<<"</style></head>">>,
 		<<"<body>\n<h1>No old hacker news!</h1>\n">>,
 		<<"<table>\n">>,		
@@ -49,10 +50,17 @@ gen_nohn_table(ItenNo, [CurrentItemNo | HNList], LastVisitCookie, HNStatus) ->
 		true -> <<"hidden">>;
 		false -> <<"shown">>
 	end,
-	[<<"<tr class=\"">>,ItemClass,<<"\">">>,
+	TopScorerClass = get_top_scorer(maps:get(<<"score">>, Item, 0)),
+	[<<"<tr class=\"">>,ItemClass, TopScorerClass,<<"\">">>,
 			<<"<td>">>, list_to_binary(integer_to_list(ItenNo)), <<".</td>">>,
 			<<"<td>">>, ItemLink, <<"</td>">>,
 			<<"<td>Score: ">>, integer_to_list(ItemScore), <<"</td>">>,
 		<<"</tr>">>
 		] 
 		++ gen_nohn_table(ItenNo + 1, HNList, LastVisitCookie, HNStatus).
+
+get_top_scorer(Score) ->
+	case Score < 200 of
+		true ->	<<"">>;
+		false -> <<" top_scorer">>
+	end.
