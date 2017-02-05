@@ -11,21 +11,21 @@
 
 init(Req0, State) ->
 	Cookies = cowboy_req:parse_cookies(Req0),
-	Token = case  lists:keyfind(<<"last_visit">>, 1, Cookies) of
+	LastVisitCookie = case  lists:keyfind(<<"last_visit">>, 1, Cookies) of
 		false -> <<"">>;
 		{_, T} -> T
 	end,
-	io:format("~p~n",[Token]),
+	io:format("~p~n",[LastVisitCookie]),
 	Req1 = cowboy_req:set_resp_cookie(<<"last_visit">>, integer_to_list(os:system_time()), Req0),
     Req = cowboy_req:reply(200,
         #{<<"content-type">> => <<"text/html">>},
-		gen_nohn_table(Cookies),
+		gen_nohn_table(LastVisitCookie),
         Req1),
     {ok, Req, State}.
 
 
-gen_nohn_table(Cookie) ->
-	Cookie,
+gen_nohn_table(LastVisitCookie) ->
+	LastVisitCookie,
 	{ok, HNStatus} = nohn_fetcher:get_status(),
 	[<<"<!DOCTYPE html><html><body><h1>No old hacker news!</h1>\n">>,
 		<<"<table>\n">>,		

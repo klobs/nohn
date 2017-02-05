@@ -97,9 +97,10 @@ handle_cast({update_item, Item}, State) when is_integer(Item), is_record(State, 
 		  {ok, ItemValue} = get_item(Item),
 		  io:format("updated item ~p with content~n~p~n",[Item, ItemValue]),
 		  ItemEnriched = maps:put(nohn_timestamp, os:system_time(), ItemValue),
-		  Updated_item_store = maps:put(ItemEnriched, ItemValue, State#state.item_store),
+		  Updated_item_store = maps:put(Item, ItemEnriched, State#state.item_store),
 		  {noreply, State#state{item_store = Updated_item_store}};
 	  _ ->
+		  %% TODO: currently items are only fetched once, thus no scores / comment counts are updated
 		  {noreply, State}
   end;
 
