@@ -8,5 +8,7 @@ start_link() ->
 	supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
-	Procs = [],
+	% {ChildId, StartFunc, Restart, Shutdown, Type, Modules}.
+	Procs = [{nohn_fetcher, {nohn_fetcher, start_link, []}, permanent, 3000, worker, [nohn_fetcher]}
+			],
 	{ok, {{one_for_one, 1, 5}, Procs}}.

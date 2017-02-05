@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, get_status/0]).
+-export([start_link/0, print_status/0, get_status/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -16,8 +16,8 @@
 		).
 
 -define(SERVER, ?MODULE).
-%%-define(FETCHINTERVAL, 300000).
--define(FETCHINTERVAL, 60000). %% Fetch news every minute
+-define(FETCHINTERVAL, 300000). %% Fetch news every 5 minutes
+%%-define(FETCHINTERVAL, 60000). %% Fetch news every minute
 -define(HNURL, "https://hacker-news.firebaseio.com/v0/topstories.json").
 
 %%====================================================================
@@ -30,8 +30,11 @@
 start_link() ->
   gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-get_status() ->
+print_status() ->
   gen_server:call(?SERVER, print_status_report).
+
+get_status() ->
+  gen_server:call(?SERVER, get_status).
 
 %%====================================================================
 %% gen_server callbacks
@@ -60,6 +63,9 @@ init([]) ->
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
 
+handle_call(get_status, _From, State) ->
+  {reply, {ok, State}, State};
+
 handle_call(print_status_report, _From, State) ->
   print_status_report(State),
   {reply, ok, State};
@@ -77,18 +83,18 @@ handle_call(_Request, _From, State) ->
 
 handle_cast({remove_item, Item}, State) when is_integer(Item), is_record(State, state) ->
   case  maps:find(Item, State#state.item_store) of
-	  error -> 
+	  error ->
+		  {noreply, State};
+	  _ -> 
 		  io:format("removing item ~p~n",[Item]),
 		  Updated_item_store = maps:remove(Item, State#state.item_store),
-		  {noreply, State#state{item_store = Updated_item_store}};
-	  _ ->
-		  {noreply, State}
+		  {noreply, State#state{item_store = Updated_item_store}}
   end;
 
 handle_cast({update_item, Item}, State) when is_integer(Item), is_record(State, state) ->
   case  maps:find(Item, State#state.item_store) of
 	  error -> 
-		  ItemValue = get_item(Item),
+		  {ok, ItemValue} = get_item(Item),
 		  io:format("updated item ~p with content~n~p~n",[Item, ItemValue]),
 		  Updated_item_store = maps:put(Item, ItemValue, State#state.item_store),
 		  {noreply, State#state{item_store = Updated_item_store}};
@@ -144,9 +150,9 @@ get_item(ItenNo) ->
 	{ok, Item}.
 
 refresh(State) when is_record(State, state) ->
-  Now = os:timestamp(),
+  Now = os:system_time(),
   {ok, {_,_, HNListJSON}} = httpc:request(?HNURL),
-  HNList = lists:sublist(jiffy:decode(HNListJSON),25),
+  HNList = lists:sublist(jiffy:decode(HNListJSON),30),
   remove_old_entries(State#state.hn_list -- HNList),
   update_items(HNList),
   NState  = State#state{last_update = Now, hn_list = HNList},
@@ -165,8 +171,7 @@ remove_old_entries([Item | RemovableItems]) ->
 	remove_old_entries(RemovableItems).
 
 print_status_report(State) when is_record(State, state) ->
-	LastUpdateTime = calendar:now_to_datetime(State#state.last_update),
-	io:format("Status: ~p~n",[LastUpdateTime]),
+	io:format("Status: ~p~n",[State#state.last_update]),
 	io:format("Items in store: ~p~n",[State#state.item_store]),
 	ok;	
 print_status_report(State) ->
