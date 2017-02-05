@@ -26,6 +26,7 @@ init(Req0, State) ->
 gen_nohn_table(LastVisitCookie) ->
 	LastVisitCookie,
 	{ok, HNStatus} = nohn_fetcher:get_status(),
+	LastUpdate = integer_to_list((os:system_time() - HNStatus#state.last_update) div (60*60*100000)),
 	[<<"<!DOCTYPE html><html>">>,
 			<<"<head><style>">>,
 			<<".hidden { visibility: hidden; background-color:#D46A6A; }">>,
@@ -33,7 +34,7 @@ gen_nohn_table(LastVisitCookie) ->
 		<<"<body>\n<h1>No old hacker news!</h1>\n">>,
 		<<"<table>\n">>,		
 		gen_nohn_table(1, HNStatus#state.hn_list, LastVisitCookie, HNStatus),
-		<<"</table></body></html>\n">>	
+		<<"</table><p>Last update ">>, LastUpdate,<<" seconds ago.</p></body></html>\n">>
 		].
 
 gen_nohn_table(_ItenNo, [], _LastVisitCookie, _HNStatus) ->
