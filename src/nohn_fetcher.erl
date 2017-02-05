@@ -3,21 +3,21 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/0, get_status/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--export([refresh/1]).
-
 -record(state, {last_update,
-				hn_list=[]}
+				hn_list=[], 
+				item_store=#{}
+			}
 		).
 
 -define(SERVER, ?MODULE).
 %%-define(FETCHINTERVAL, 300000).
--define(FETCHINTERVAL, 3000).
+-define(FETCHINTERVAL, 60000). %% Fetch news every minute
 -define(HNURL, "https://hacker-news.firebaseio.com/v0/topstories.json").
 
 %%====================================================================
@@ -29,6 +29,9 @@
 %%--------------------------------------------------------------------
 start_link() ->
   gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+
+get_status() ->
+  gen_server:call(?SERVER, print_status_report).
 
 %%====================================================================
 %% gen_server callbacks
@@ -44,7 +47,7 @@ start_link() ->
 init([]) ->
   inets:start(),
   ssl:start(),
-  NState = refresh(#state{}),
+  {ok, NState} = refresh(#state{}),
   {ok, NState}.
 
 %%--------------------------------------------------------------------
@@ -56,6 +59,11 @@ init([]) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
+
+handle_call(print_status_report, _From, State) ->
+  print_status_report(State),
+  {reply, ok, State};
+
 handle_call(_Request, _From, State) ->
   Reply = ok,
   {reply, Reply, State}.
@@ -66,6 +74,28 @@ handle_call(_Request, _From, State) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
+
+handle_cast({remove_item, Item}, State) when is_integer(Item), is_record(State, state) ->
+  case  maps:find(Item, State#state.item_store) of
+	  error -> 
+		  io:format("removing item ~p~n",[Item]),
+		  Updated_item_store = maps:remove(Item, State#state.item_store),
+		  {noreply, State#state{item_store = Updated_item_store}};
+	  _ ->
+		  {noreply, State}
+  end;
+
+handle_cast({update_item, Item}, State) when is_integer(Item), is_record(State, state) ->
+  case  maps:find(Item, State#state.item_store) of
+	  error -> 
+		  ItemValue = get_item(Item),
+		  io:format("updated item ~p with content~n~p~n",[Item, ItemValue]),
+		  Updated_item_store = maps:put(Item, ItemValue, State#state.item_store),
+		  {noreply, State#state{item_store = Updated_item_store}};
+	  _ ->
+		  {noreply, State}
+  end;
+
 handle_cast(_Msg, State) ->
   {noreply, State}.
 
@@ -75,13 +105,17 @@ handle_cast(_Msg, State) ->
 %%                                       {stop, Reason, State}
 %% Description: Handling all non call/cast messages
 %%--------------------------------------------------------------------
-handle_info(refresh, State) ->
-	case refresh(State) of
-		{ok, NState} -> {noreply, NState};
+handle_info(refresh, State) when is_record(State, state) ->
+	io:format("refreshing...~n"),
+	HNUpdate = refresh(State),
+	case HNUpdate of
+		{ok, NState} -> 
+			{noreply, NState};
 		_ -> {noreply, State}
 	end;
-handle_info(_Info, State) ->
-  {noreply, State}.
+handle_info(Info, State) ->
+	io:format("I received a wired info here: ~p~nState: ~p~n",[Info, State]),
+	{noreply, State}.
 
 %%--------------------------------------------------------------------
 %% Function: terminate(Reason, State) -> void()
@@ -104,13 +138,43 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 
-refresh(State) ->
-  Now = os:timestamp(),
-  HNList = httpc:request(?HNURL),
-  erlang:send_after(?FETCHINTERVAL, self(), refresh),
-  NState  = State#state{last_update = Now, hn_list = HNList},
-  io:format("nohn_fetcher: fetched list"),
-  {ok, NState}.
+get_item(ItenNo) ->
+	{ok, {_,_, ItemJSON}} = httpc:request("https://hacker-news.firebaseio.com/v0/item/" ++ io_lib:format("~p",[ItenNo]) ++ ".json"),
+	Item = jiffy:decode(ItemJSON, [return_maps]),
+	{ok, Item}.
 
-%fetch_item(Item) ->
-	%{Item, {}}.	
+refresh(State) when is_record(State, state) ->
+  Now = os:timestamp(),
+  {ok, {_,_, HNListJSON}} = httpc:request(?HNURL),
+  HNList = lists:sublist(jiffy:decode(HNListJSON),25),
+  remove_old_entries(State#state.hn_list -- HNList),
+  update_items(HNList),
+  NState  = State#state{last_update = Now, hn_list = HNList},
+  erlang:send_after(?FETCHINTERVAL, self(), refresh),
+  {ok, NState};
+
+refresh(State) ->
+	io:format("refresh(): state kaputt: ~p~n",[State]),
+	erlang:send_after(?FETCHINTERVAL, self(), refresh),
+	{ok, #state{}}.
+
+remove_old_entries([]) ->
+	nothing_to_remove;
+remove_old_entries([Item | RemovableItems]) ->
+	gen_server:cast(?SERVER, {remove_item, Item}),
+	remove_old_entries(RemovableItems).
+
+print_status_report(State) when is_record(State, state) ->
+	LastUpdateTime = calendar:now_to_datetime(State#state.last_update),
+	io:format("Status: ~p~n",[LastUpdateTime]),
+	io:format("Items in store: ~p~n",[State#state.item_store]),
+	ok;	
+print_status_report(State) ->
+	io:format("Status seems to be broked: ~p~n",[State]),
+	ok.
+
+update_items([]) ->
+		up2date;
+update_items([HNListEntry| HNList]) ->
+	gen_server:cast(?SERVER, {update_item, HNListEntry}),
+	update_items(HNList).
