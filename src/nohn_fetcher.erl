@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, print_status/0, get_status/0]).
+-export([start_link/0, print_status/0, get_status/0, force_refresh/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -35,6 +35,9 @@ print_status() ->
 
 get_status() ->
   gen_server:call(?SERVER, get_status).
+
+force_refresh() ->
+	gen_server:cast(?SERVER,refresh).
 
 %%====================================================================
 %% gen_server callbacks
@@ -99,10 +102,18 @@ handle_cast({update_item, Item}, State) when is_integer(Item), is_record(State, 
 		  ItemEnriched = maps:put(nohn_timestamp, os:system_time(), ItemValue),
 		  Updated_item_store = maps:put(Item, ItemEnriched, State#state.item_store),
 		  {noreply, State#state{item_store = Updated_item_store}};
-	  _ ->
+	  {ok, ItemInStore} ->
 		  %% TODO: currently items are only fetched once, thus no scores / comment counts are updated
-		  {noreply, State}
+		  {ok, ItemValue} = get_item(Item),
+		  ItemEnriched = maps:update(<<"score">>, maps:get(<<"score">>,ItemValue), ItemInStore),
+		  io:format("updated item ~p with new score~n~p~n",[Item, maps:get(<<"score">>, ItemValue)]),
+		  Updated_item_store = maps:put(Item, ItemEnriched, State#state.item_store),
+		  {noreply, State#state{item_store = Updated_item_store}}
   end;
+
+handle_cast(refresh, State) ->
+	{ok, NState} = refresh(State),
+  {noreply, NState};
 
 handle_cast(_Msg, State) ->
   {noreply, State}.
