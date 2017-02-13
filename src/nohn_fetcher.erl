@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, print_status/0, get_status/0, force_refresh/0]).
+-export([start_link/0, print_status/0, get_status/0, save_status/0, force_refresh/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -38,6 +38,9 @@ get_status() ->
 
 force_refresh() ->
 	gen_server:cast(?SERVER,refresh).
+
+save_status() ->
+	gen_server:cast(?SERVER, save_status).
 
 %%====================================================================
 %% gen_server callbacks
@@ -76,6 +79,10 @@ handle_call(get_status, _From, State) ->
 
 handle_call(print_status_report, _From, State) ->
   print_status_report(State),
+  {reply, ok, State};
+
+handle_call(save_status, _From, State) ->
+  save_status(State),
   {reply, ok, State};
 
 handle_call(_Request, _From, State) ->
@@ -118,7 +125,8 @@ handle_cast({update_item, Item}, State) when is_integer(Item), is_record(State, 
 
 handle_cast(refresh, State) ->
 	{ok, NState} = refresh(State),
-  {noreply, NState};
+	file:write_file("nohn.state", term_to_binary(NState)),
+    {noreply, NState};
 
 handle_cast(_Msg, State) ->
   {noreply, State}.
@@ -201,3 +209,9 @@ update_items([]) ->
 update_items([HNListEntry| HNList]) ->
 	gen_server:cast(?SERVER, {update_item, HNListEntry}),
 	update_items(HNList).
+
+save_status(State) ->
+	io:format("Saving Status to nohn.state",[]),
+	B = term_to_binary(State),
+	file:write_file("nohn.state", B),
+	ok.
