@@ -9,7 +9,7 @@ start(_Type, _Args) ->
         {'_', [{"/", nohn_handler, []}]}
     ]),
     {ok, _} = cowboy:start_clear(my_http_listener, 100,
-        [{port, 8080}],
+		[{port, 8080},{ip,{127,0,0,1}}],
         #{env => #{dispatch => Dispatch}}
     ),
 	nohn_sup:start_link().
