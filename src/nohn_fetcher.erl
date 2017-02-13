@@ -9,7 +9,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--record(state, {last_update,
+-record(nohn_fetcher_state, {last_update,
 				hn_list=[], 
 				item_store=#{}
 			}
@@ -53,8 +53,13 @@ force_refresh() ->
 init([]) ->
   inets:start(),
   ssl:start(),
-  {ok, NState} = refresh(#state{}),
-  {ok, NState}.
+  case file:read_file("nohn.state") of
+	  {ok, <<>>} -> refresh(#nohn_fetcher_state{});
+	  {ok, Binary} -> 
+		  NState  = binary_to_term(Binary),
+		  {ok, NState};
+	  _ -> refresh(#nohn_fetcher_state{})
+  end.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -84,31 +89,31 @@ handle_call(_Request, _From, State) ->
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
 
-handle_cast({remove_item, Item}, State) when is_integer(Item), is_record(State, state) ->
-  case  maps:find(Item, State#state.item_store) of
+handle_cast({remove_item, Item}, State) when is_integer(Item), is_record(State, nohn_fetcher_state) ->
+  case  maps:find(Item, State#nohn_fetcher_state.item_store) of
 	  error ->
 		  {noreply, State};
 	  _ -> 
 		  io:format("removing item ~p~n",[Item]),
-		  Updated_item_store = maps:remove(Item, State#state.item_store),
-		  {noreply, State#state{item_store = Updated_item_store}}
+		  Updated_item_store = maps:remove(Item, State#nohn_fetcher_state.item_store),
+		  {noreply, State#nohn_fetcher_state{item_store = Updated_item_store}}
   end;
 
-handle_cast({update_item, Item}, State) when is_integer(Item), is_record(State, state) ->
-  case  maps:find(Item, State#state.item_store) of
+handle_cast({update_item, Item}, State) when is_integer(Item), is_record(State, nohn_fetcher_state) ->
+  case  maps:find(Item, State#nohn_fetcher_state.item_store) of
 	  error -> 
 		  {ok, ItemValue} = get_item(Item),
 		  io:format("updated item ~p with content~n~p~n",[Item, ItemValue]),
 		  ItemEnriched = maps:put(nohn_timestamp, os:system_time(), ItemValue),
-		  Updated_item_store = maps:put(Item, ItemEnriched, State#state.item_store),
-		  {noreply, State#state{item_store = Updated_item_store}};
+		  Updated_item_store = maps:put(Item, ItemEnriched, State#nohn_fetcher_state.item_store),
+		  {noreply, State#nohn_fetcher_state{item_store = Updated_item_store}};
 	  {ok, ItemInStore} ->
 		  %% TODO: currently items are only fetched once, thus no scores / comment counts are updated
 		  {ok, ItemValue} = get_item(Item),
 		  ItemEnriched = maps:update(<<"score">>, maps:get(<<"score">>,ItemValue), ItemInStore),
 		  io:format("updated item ~p with new score~n~p~n",[Item, maps:get(<<"score">>, ItemValue)]),
-		  Updated_item_store = maps:put(Item, ItemEnriched, State#state.item_store),
-		  {noreply, State#state{item_store = Updated_item_store}}
+		  Updated_item_store = maps:put(Item, ItemEnriched, State#nohn_fetcher_state.item_store),
+		  {noreply, State#nohn_fetcher_state{item_store = Updated_item_store}}
   end;
 
 handle_cast(refresh, State) ->
@@ -124,7 +129,7 @@ handle_cast(_Msg, State) ->
 %%                                       {stop, Reason, State}
 %% Description: Handling all non call/cast messages
 %%--------------------------------------------------------------------
-handle_info(refresh, State) when is_record(State, state) ->
+handle_info(refresh, State) when is_record(State, nohn_fetcher_state) ->
 	io:format("refreshing...~n"),
 	HNUpdate = refresh(State),
 	case HNUpdate of
@@ -162,20 +167,20 @@ get_item(ItenNo) ->
 	Item = jiffy:decode(ItemJSON, [return_maps]),
 	{ok, Item}.
 
-refresh(State) when is_record(State, state) ->
+refresh(State) when is_record(State, nohn_fetcher_state) ->
   Now = os:system_time(),
   {ok, {_,_, HNListJSON}} = httpc:request(?HNURL),
   HNList = lists:sublist(jiffy:decode(HNListJSON),30),
-  remove_old_entries(State#state.hn_list -- HNList),
+  remove_old_entries(State#nohn_fetcher_state.hn_list -- HNList),
   update_items(HNList),
-  NState  = State#state{last_update = Now, hn_list = HNList},
+  NState  = State#nohn_fetcher_state{last_update = Now, hn_list = HNList},
   erlang:send_after(?FETCHINTERVAL, self(), refresh),
   {ok, NState};
 
 refresh(State) ->
 	io:format("refresh(): state kaputt: ~p~n",[State]),
 	erlang:send_after(?FETCHINTERVAL, self(), refresh),
-	{ok, #state{}}.
+	{ok, #nohn_fetcher_state{}}.
 
 remove_old_entries([]) ->
 	nothing_to_remove;
@@ -183,9 +188,9 @@ remove_old_entries([Item | RemovableItems]) ->
 	gen_server:cast(?SERVER, {remove_item, Item}),
 	remove_old_entries(RemovableItems).
 
-print_status_report(State) when is_record(State, state) ->
-	io:format("Status: ~p~n",[State#state.last_update]),
-	io:format("Items in store: ~p~n",[State#state.item_store]),
+print_status_report(State) when is_record(State, nohn_fetcher_state) ->
+	io:format("Status: ~p~n",[State#nohn_fetcher_state.last_update]),
+	io:format("Items in store: ~p~n",[State#nohn_fetcher_state.item_store]),
 	ok;	
 print_status_report(State) ->
 	io:format("Status seems to be broked: ~p~n",[State]),

@@ -3,7 +3,7 @@
 
 -export([init/2]).
 
--record(state, {last_update,
+-record(nohn_fetcher_state, {last_update,
 				hn_list=[], 
 				item_store=#{}
 			}
@@ -26,7 +26,7 @@ init(Req0, State) ->
 gen_nohn_table(LastVisitCookie) ->
 	LastVisitCookie,
 	{ok, HNStatus} = nohn_fetcher:get_status(),
-	LastUpdate = integer_to_list((os:system_time() - HNStatus#state.last_update) div (60*60*100000)),
+	LastUpdate = integer_to_list((os:system_time() - HNStatus#nohn_fetcher_state.last_update) div (60*60*100000)),
 	[<<"<!DOCTYPE html><html>">>,
 			<<"<head>\n<style>\n">>,
 			<<".hidden {opacity: 0.2;}\n">>,
@@ -34,14 +34,14 @@ gen_nohn_table(LastVisitCookie) ->
 			<<"</style></head>">>,
 		<<"<body>\n<h1>No old hacker news!</h1>\n">>,
 		<<"<table>\n">>,		
-		gen_nohn_table(1, HNStatus#state.hn_list, LastVisitCookie, HNStatus),
+		gen_nohn_table(1, HNStatus#nohn_fetcher_state.hn_list, LastVisitCookie, HNStatus),
 		<<"</table><p>Last update ">>, LastUpdate,<<" seconds ago.</p></body></html>\n">>
 		].
 
 gen_nohn_table(_ItenNo, [], _LastVisitCookie, _HNStatus) ->
 	<<"">>;
 gen_nohn_table(ItenNo, [CurrentItemNo | HNList], LastVisitCookie, HNStatus) ->
-	Item = maps:get(CurrentItemNo, HNStatus#state.item_store, #{}),
+	Item = maps:get(CurrentItemNo, HNStatus#nohn_fetcher_state.item_store, #{}),
 	ItemTitle =  maps:get(<<"title">>, Item, <<"Not yet in itemstore">>),
 	ItemURL =  maps:get(<<"url">>, Item, <<"Not yet in itemstore">>),
 	ItemLink = [<<"<a href=\"">>,ItemURL,<<"\">">>, ItemTitle, <<"</a>">>],
