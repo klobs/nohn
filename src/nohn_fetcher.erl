@@ -115,7 +115,6 @@ handle_cast({update_item, Item}, State) when is_integer(Item), is_record(State, 
 		  Updated_item_store = maps:put(Item, ItemEnriched, State#nohn_fetcher_state.item_store),
 		  {noreply, State#nohn_fetcher_state{item_store = Updated_item_store}};
 	  {ok, ItemInStore} ->
-		  %% TODO: currently items are only fetched once, thus no scores / comment counts are updated
 		  {ok, ItemValue} = get_item(Item),
 		  ItemEnriched = maps:update(<<"score">>, maps:get(<<"score">>,ItemValue), ItemInStore),
 		  io:format("updated item ~p with new score~n~p~n",[Item, maps:get(<<"score">>, ItemValue)]),
