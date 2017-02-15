@@ -7,4 +7,4 @@ dep_cowboy_commit = master
 
 DEP_PLUGINS = cowboy
 
-include ../cowboy/erlang.mk
+include erlang.mk
