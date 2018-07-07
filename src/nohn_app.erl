@@ -8,7 +8,7 @@ start(_Type, _Args) ->
     Dispatch = cowboy_router:compile([
         {'_', [{"/", nohn_handler, []}]}
     ]),
-    {ok, _} = cowboy:start_clear(my_http_listener, 100,
+    {ok, _} = cowboy:start_clear(my_http_listener,
 		[{port, 8080},{ip,{127,0,0,1}}],
         #{env => #{dispatch => Dispatch}}
     ),
