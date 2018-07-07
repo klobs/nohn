@@ -11,9 +11,14 @@
 
 init(Req0, State) ->
 	Cookies = cowboy_req:parse_cookies(Req0),
-	LastVisitCookie = case  lists:keyfind(<<"last_visit">>, 1, Cookies) of
+	T1 = case  lists:keyfind(<<"last_visit">>, 1, Cookies) of
 		false -> 0;
-		{_, T} -> list_to_integer(binary_to_list(T))
+		{_, T} -> binary_to_list(T)
+	end,
+	LastVisitCookie = case T1 of
+		_ when is_integer(T1) -> T1;
+		[] -> 0;
+		_ when is_list(T1) -> list_to_integer(T1)
 	end,
 	Req1 = cowboy_req:set_resp_cookie(<<"last_visit">>, integer_to_list(os:system_time()), Req0),
     Req = cowboy_req:reply(200,
